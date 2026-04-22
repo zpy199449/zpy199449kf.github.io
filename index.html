@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>对外开放·渐进之路 | 互动探究地图</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', 'Roboto', 'Microsoft YaHei', sans-serif;
+            background: #eef2f5;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .app-container {
+            display: flex;
+            height: 100vh;
+            width: 100%;
+        }
+        .sidebar {
+            width: 330px;
+            background: rgba(255, 255, 255, 0.96);
+            backdrop-filter: blur(2px);
+            box-shadow: 2px 0 15px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            z-index: 1000;
+            padding: 16px 14px;
+            border-right: 1px solid #ddd;
+        }
+        .map-container {
+            flex: 1;
+            position: relative;
+        }
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+        .section {
+            background: #fff;
+            border-radius: 20px;
+            margin-bottom: 20px;
+            padding: 12px 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            border: 1px solid #e9ecef;
+        }
+        .section-title {
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: #b22234;
+            border-left: 4px solid #ffb347;
+            padding-left: 12px;
+            margin-bottom: 12px;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .year-label {
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.3rem;
+            color: #1e466e;
+            margin: 8px 0;
+        }
+        .year-timeline {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 16px 0;
+            position: relative;
+            padding: 0 4px;
+        }
+        .year-timeline::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: #ddd;
+            z-index: 1;
+            transform: translateY(-50%);
+        }
+        .year-item {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: #fff;
+            border: 2px solid #2c5a8c;
+            color: #2c5a8c;
+            display: flex; align-items: center; justify-content:center;
+            font-size: 12px; font-weight: bold; cursor: pointer;
+            position: relative; z-index: 2; transition: all 0.2s;
+        }
+        .year-item.active {
+            background: #ff8c42; color: #fff; border-color: #ff8c42; transform: scale(1.15);
+        }
+        .play-controls { display: none; }
+        .btn-icon {
+            background: #2c5a8c; border: none; color: white; padding: 6px 16px; border-radius: 40px;
+            cursor: pointer; font-weight: 500; transition: all 0.2s;
+        }
+        .btn-icon:hover { background: #ff8c42; transform: scale(1.02); }
+        .layer-group { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+        .layer-check { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+        .quiz-modal {
+            position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7);
+            display:flex; align-items:center; justify-content:center; z-index:2000;
+            visibility:hidden; opacity:0; transition:0.2s;
+        }
+        .quiz-modal.active { visibility:visible; opacity:1; }
+        .modal-card {
+            background:white; border-radius:28px; max-width:520px; width:90%; padding:24px;
+            box-shadow:0 20px 40px rgba(0,0,0,0.3); border-top:6px solid #ffb347;
+        }
+        .modal-question { font-size:1.1rem; font-weight:600; margin-bottom:20px; line-height:1.5; }
+        .modal-option { background:#f1f3f5; padding:12px; margin:8px 0; border-radius:40px; cursor:pointer; transition:0.1s; }
+        .modal-option:hover { background:#e9ecef; }
+        .modal-option.selected { background:#ffe0b5 !important; font-weight:bold; }
+        .modal-feedback { margin-top:15px; padding:10px; border-radius:20px; font-size:0.9rem; }
+        .final-report {
+            position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(10,20,30,0.95); backdrop-filter:blur(8px);
+            z-index:3000; display:flex; align-items:center; justify-content:center;
+            visibility:hidden; opacity:0; transition:0.3s; overflow-y:auto;
+        }
+        .final-report.active { visibility:visible; opacity:1; }
+        .report-card {
+            background:#fff9ef; max-width:700px; width:90%; max-height:85vh; overflow-y:auto;
+            border-radius:40px; padding:30px; box-shadow:0 25px 50px rgba(0,0,0,0.4);
+        }
+        .final-question {
+            background:#fef3e2; border-left:8px solid #b22234; margin:25px 0; padding:20px; border-radius:24px;
+        }
+        .final-option { background:#f1f3f5; padding:12px; margin:8px 0; border-radius:40px; cursor:pointer; transition:0.1s; }
+        .final-option:hover { background:#e9ecef; }
+        .final-option.selected { background:#ffe0b5 !important; font-weight:bold; }
+        .final-feedback { margin-top:10px; padding:8px; border-radius:12px; font-size:0.9rem; display:none; }
+        .info-footer {
+            position:absolute; bottom:20px; left:350px; right:20px; background:rgba(0,0,0,0.8); backdrop-filter:blur(12px);
+            color:white; border-radius:16px; padding:12px 20px; z-index:900; display:flex; align-items:center; justify-content:space-between;
+            pointer-events:auto; border-left:5px solid #ffb347;
+        }
+        .export-btn { display:none; }
+        @media (max-width:768px) {
+            .sidebar { width:260px; }
+            .info-footer { left:270px; font-size:0.75rem; }
+        }
+    </style>
+</head>
+<body>
+<div class="app-container">
+    <div class="sidebar">
+        <div class="section" style="background: linear-gradient(145deg, #fff4e6, #fff);">
+            <h2 style="color:#b22234;">🇨🇳 对外开放·渐进之路</h2>
+            <p style="font-size:0.75rem;">经济特区 → 沿海开放城市 → 沿海经济开放区 → 浦东开发 → 全面开放</p>
+        </div>
+
+        <div class="section">
+            <div class="section-title"><i class="fas fa-timeline"></i> 历史节点·探索进程</div>
+            <div class="year-label" id="currentYearLabel">1990</div>
+            <div class="year-timeline" id="yearTimeline">
+                <div class="year-item" data-year="1978">1978</div>
+                <div class="year-item" data-year="1980">1980</div>
+                <div class="year-item" data-year="1984">1984</div>
+                <div class="year-item" data-year="1985">1985</div>
+                <div class="year-item" data-year="1988">1988</div>
+                <div class="year-item active" data-year="1990">1990</div>
+            </div>
+            <div id="nodeStatus" style="font-size:0.7rem; margin-top:8px; text-align:center; color:#888;">📌 点击年份切换，关键节点将弹出题目</div>
+        </div>
+
+        <div class="section">
+            <div class="section-title"><i class="fas fa-layer-group"></i> 地图图层</div>
+            <div class="layer-group">
+                <label class="layer-check"><input type="checkbox" id="toggleReformPoints" checked> <i class="fas fa-tractor"></i> 改革节点</label>
+                <label class="layer-check"><input type="checkbox" id="toggleOpenPoints" checked> <i class="fas fa-ship"></i> 开放节点</label>
+                <label class="layer-check"><input type="checkbox" id="toggleRoutes" checked> <i class="fas fa-chart-line"></i> 生长路线</label>
+                <button id="themeBtn" class="btn-icon" style="background:#5a626e; margin-top:8px;"><i class="fas fa-palette"></i> 地图主题</button>
+            </div>
+        </div>
+
+        <div class="section" style="font-size:0.7rem; text-align:center; color:#777;">
+            <i class="fas fa-map-marked-alt"></i> 点击地图标记点可查看详情<br>
+            <i class="fas fa-question-circle"></i> 每个重要节点会弹出题目，答完继续
+        </div>
+    </div>
+
+    <div class="map-container">
+        <div id="map"></div>
+        <div id="infoFooter" class="info-footer">
+            <div class="info-text" id="dynamicInfoText">📖 点击地图标记点或上方年份探索开放足迹</div>
+        </div>
+    </div>
+</div>
+
+<div id="quizModal" class="quiz-modal">
+    <div class="modal-card">
+        <div id="modalQuestionText" class="modal-question"></div>
+        <div id="modalOptions"></div>
+        <div id="modalFeedback" class="modal-feedback"></div>
+        <button id="modalSubmitBtn" class="btn-icon" style="background:#ff8c42; margin-top:12px;">提交答案</button>
+    </div>
+</div>
+
+<div id="finalReport" class="final-report">
+    <div class="report-card">
+        <h2 style="color:#b22234; text-align:center;">🎉 探究之旅完成 🎉</h2>
+        <p style="text-align:center;">请完成探究选择题，提交后查看结果</p>
+        
+        <div id="finalQuestionsContainer"></div>
+        
+        <div style="display: flex; justify-content: center; gap: 16px; margin-top: 30px; flex-wrap:wrap;">
+            <button id="submitFinalBtn" class="btn-icon" style="background:#2c5a8c; padding:12px 28px;">提交我的答案</button>
+            <button id="backToHomeBtn" class="btn-icon" style="background:#6c757d; padding:12px 28px;">🔙 返回开始页面</button>
+        </div>
+        <div id="finalMsg" style="margin-top:20px; text-align:center; color:green;"></div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+L.Polyline.include({
+    snakeIn: function(speed = 200) {
+        this._snakePoints = []; this._snakeTime = 0; this._snakeSpeed = speed;
+        var points = this._latlngs;
+        for (var i=0; i<points.length; i++) {
+            this._snakePoints.push({ latlng: points[i], distance: i>0 ? this._distance(points[i-1], points[i]) : 0, totalDistance: 0 });
+        }
+        for (i=1; i<this._snakePoints.length; i++) this._snakePoints[i].totalDistance = this._snakePoints[i-1].totalDistance + this._snakePoints[i].distance;
+        this._totalDistance = this._snakePoints[this._snakePoints.length-1].totalDistance;
+        this._snakeStart(); return this;
+    },
+    _snakeStart: function() { this._snakeFrame(); },
+    _snakeFrame: function() {
+        this._snakeTime += 16;
+        var progress = Math.min(this._snakeTime / this._snakeSpeed, 1);
+        var currentDistance = this._totalDistance * progress;
+        var latlngs = [];
+        for (var i=0; i<this._snakePoints.length; i++) {
+            if (this._snakePoints[i].totalDistance <= currentDistance) latlngs.push(this._snakePoints[i].latlng);
+            else {
+                if (i>0) {
+                    var seg = (currentDistance - this._snakePoints[i-1].totalDistance) / this._snakePoints[i].distance;
+                    var lat = this._snakePoints[i-1].latlng.lat + (this._snakePoints[i].latlng.lat - this._snakePoints[i-1].latlng.lat)*seg;
+                    var lng = this._snakePoints[i-1].latlng.lng + (this._snakePoints[i].latlng.lng - this._snakePoints[i-1].latlng.lng)*seg;
+                    latlngs.push(L.latLng(lat,lng));
+                } break;
+            }
+        }
+        this.setLatLngs(latlngs);
+        if (progress<1) requestAnimationFrame(L.bind(this._snakeFrame, this));
+    },
+    _distance: function(a,b) {
+        var R=6371, dLat=(b.lat-a.lat)*Math.PI/180, dLng=(b.lng-a.lng)*Math.PI/180;
+        var x = Math.sin(dLat/2)**2 + Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLng/2)**2;
+        return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1-x));
+    }
+});
+
+const fixedYears = [1978, 1980, 1984, 1985, 1988, 1990];
+const timelineNodes = [
+    { year: 1978, name: "十一届三中全会",
+      question: "1978年12月召开的十一届三中全会，作出了什么重大决策？",
+      options: ["开展人民公社化运动", "建立社会主义市场经济体制", "把党和国家工作中心转移到经济建设上来，实行改革开放", "开发上海浦东"],
+      correct: 2, explanation: "全会果断结束‘以阶级斗争为纲’，实现思想路线、政治路线、组织路线拨乱反正，开启改革开放。" },
+    { year: 1980, name: "经济特区成立",
+      question: "下列哪个城市不属于经济特区",
+      options: ["珠海", "厦门", "深圳", "汕头", "广州"], correct: 4, explanation: "中国的经济特区包括深圳、珠海、汕头、厦门、海南等，广州并非经济特区。" },
+    { year: 1984, name: "沿海港口城市",
+      question: "1984年，我国把大连、天津、青岛、湛江等14个城市设为？",
+      options: ["经济特区", "自由贸易城市", "沿海港口城市", "经济开发区"], correct: 2, explanation: "1984年开放14个沿海港口城市，扩大对外开放。" },
+    { year: 1985, name: "沿海经济开放区",
+      question: "1985年，我国把长江三角洲、珠江三角洲、闽南厦漳泉三角地区设为？",
+      options: ["建立自由贸易试验区", "沿海开放城市", "开发开放区", "沿海经济开放区"], correct: 3, explanation: "1985年开辟沿海经济开放区，形成点线面开放格局。" },
+    { year: 1988, name: "海南经济特区",
+      question: "1988年中央在哪设立经济特区",
+      options: ["广州", "海南", "上海", "天津"], correct: 1, explanation: "1988年设立海南经济特区，是全国最大经济特区。" },
+    { year: 1990, name: "浦东开发开放",
+      question: "20世纪90年代，中国进一步对外开放的重要举措是？",
+      options: ["设立经济特区", "开放14个沿海港口城市","开发开放上海浦东","加入世界贸易组织"], correct: 2, explanation: "1990年开发开放上海浦东，标志对外开放进入新阶段。" }
+];
+
+const pointsData = [
+    { id:"xiaogang", name:"小岗村", lat:32.86, lng:117.75, year:1978, category:"rural", type:"大包干发源地", desc:"1978年安徽小岗村率先实行家庭联产承包责任制，拉开农村改革序幕。", icon:"🌾" },
+    { id:"shenzhen", name:"深圳特区", lat:22.543, lng:114.058, year:1980, category:"open", type:"经济特区", desc:"深圳经济特区，改革开放窗口，创造了‘深圳速度’。", icon:"🏙️" },
+    { id:"zhuhai", name:"珠海特区", lat:22.27, lng:113.57, year:1980, category:"open", type:"经济特区", desc:"毗邻澳门，高新技术发展", icon:"🏖️" },
+    { id:"shantou", name:"汕头特区", lat:23.35, lng:116.68, year:1980, category:"open", type:"经济特区", desc:"著名侨乡，开放前沿", icon:"⛵" },
+    { id:"xiamen", name:"厦门特区", lat:24.48, lng:118.08, year:1980, category:"open", type:"经济特区", desc:"对台交流窗口", icon:"🌊" },
+    { id:"pudong", name:"上海浦东", lat:31.23, lng:121.53, year:1990, category:"open", type:"新区", desc:"浦东开发开放，金融中心崛起", icon:"🏢" },
+    { id:"dalian", name:"大连", lat:38.92, lng:121.62, year:1984, category:"open", type:"沿海开放城市", desc:"北方重要港口", icon:"⚓" },
+    { id:"tianjin", name:"天津", lat:39.08, lng:117.20, year:1984, category:"open", type:"沿海开放城市", desc:"滨海新区", icon:"🏭" },
+    { id:"qingdao", name:"青岛", lat:36.06, lng:120.33, year:1984, category:"open", type:"沿海开放城市", desc:"海滨港口城市", icon:"🌊" },
+    { id:"lianyungang", name:"连云港", lat:34.56, lng:119.16, year:1984, category:"open", type:"沿海开放城市", desc:"新亚欧大陆桥东桥头堡", icon:"🚢" },
+    { id:"nantong", name:"南通", lat:31.98, lng:120.89, year:1984, category:"open", type:"沿海开放城市", desc:"近代第一城", icon:"🏗️" },
+    { id:"ningbo", name:"宁波", lat:29.87, lng:121.55, year:1984, category:"open", type:"沿海开放城市", desc:"东方大港", icon:"🚤" },
+    { id:"shanghai", name:"上海", lat:31.23, lng:121.47, year:1984, category:"open", type:"沿海开放城市", desc:"经济中心", icon:"🌃" },
+    { id:"wenzhou", name:"温州", lat:28.02, lng:120.65, year:1984, category:"open", type:"沿海开放城市", desc:"民营经济发源地", icon:"💼" },
+    { id:"fuzhou", name:"福州", lat:26.08, lng:119.30, year:1984, category:"open", type:"沿海开放城市", desc:"海峡西岸重镇", icon:"🏝️" },
+    { id:"guangzhou", name:"广州", lat:23.13, lng:113.27, year:1984, category:"open", type:"开放城市", desc:"外贸中心", icon:"🏬" },
+    { id:"zhanjiang", name:"湛江", lat:21.28, lng:110.36, year:1984, category:"open", type:"沿海开放城市", desc:"南方大港", icon:"🌴" },
+    { id:"beihai", name:"北海", lat:21.48, lng:109.12, year:1984, category:"open", type:"沿海开放城市", desc:"滨海开放城市", icon:"🌊" },
+    { id:"beijing", name:"北京·全会", lat:39.90, lng:116.40, year:1978, category:"rural", type:"转折点", desc:"十一届三中全会，改革开放历史转折。", icon:"🏛️" },
+    { id:"hainan", name:"海南特区", lat:19.19, lng:109.43, year:1988, category:"open", type:"经济特区", desc:"中国最大经济特区", icon:"🌴" }
+];
+
+const routesData = [
+    { id:"rural_line", name:"农村改革燎原", points:[[32.86,117.75],[39.90,116.40]], color:"#2e8b57", yearStart:1978 },
+    { id:"sez_line", name:"经济特区连线", points:[[22.543,114.058],[22.27,113.57],[23.35,116.68],[24.48,118.08]], color:"#e67e22", yearStart:1980 },
+    { id:"coastal_line", name:"14个沿海开放城市", points:[
+        [38.92,121.62],[39.08,117.20],[36.06,120.33],[34.56,119.16],
+        [31.98,120.89],[29.87,121.55],[31.23,121.47],[28.02,120.65],
+        [26.08,119.30],[23.13,113.27],[21.28,110.36],[21.48,109.12]
+    ], color:"#1e88e5", yearStart:1984 },
+    { id:"yangtze", name:"长江三角洲", lat:31.2, lng:121.0, radius:280000, color:"#ff9800", yearStart:1985 },
+    { id:"pearl", name:"珠江三角洲", lat:22.7, lng:113.5, radius:220000, color:"#4caf50", yearStart:1985 },
+    { id:"minnan", name:"闽南三角区", lat:24.6, lng:118.1, radius:150000, color:"#9c27b0", yearStart:1985 },
+    { id:"pudong_area", name:"上海浦东", lat:31.23, lng:121.53, radius:120000, color:"#f44336", yearStart:1990 }
+];
+
+const finalQuestions = [
+    {
+        id: "fq1",
+        title: `探究题6：我国1980年设立经济特区，1984年开放13个沿海港口城市，1985年设立沿海经济开放区到1990年开放上海浦东，这说明（ ）`,
+        options: [
+            "A.农村经济改革逐步推开",
+            "B.对外开放程度不断深化",
+            "C.城市经济体制改革开启",
+            "D.西部大开发政策的实施"
+        ],
+        correct: 1,
+        explanation: "从经济特区到沿海开放城市、经济开放区、浦东开发，体现我国对外开放不断扩大、逐步深化的历程"
+    },
+    {
+        id: "fq2",
+        title: "探究题7：1990年浦东的外贸进出口总额是26亿元，2019年超过20500亿元，30年增长了近790倍；2019年，浦东新区地区生产总值为1.27万亿元，相比1990年的60亿元，30年增长了约210倍。放在全国看，浦东以全国1/8000的面积，创造了1/80的GDP。浦东这30年的变化说明（）",
+        options: [
+            "A.浦东率先实行了家庭联产承包责任制",
+            "B.对外开放政策极大促进经济发展",
+            "C.我国已经实现了社会主义现代化",
+            "D.浦东成为我国唯一的经济特区"
+        ],
+        correct: 1,
+        explanation: "浦东开发开放是对外开放重要举措，证明对外开放政策正确有效"
+    }
+];
+
+let map, currentYear = 1990;
+let markersGroup = L.layerGroup();
+let routeGroup = L.layerGroup();
+let allMarkers = [];
+let allRoutes = [];
+let currentNodeIndex = 0;
+let userAnswers = [];
+let finalUserAnswers = {};
+let modalActive = false;
+let currentModalNode = null;
+
+function initMap() {
+    map = L.map('map').setView([34.5, 112.0], 5);
+    const tileLight = L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', { subdomains: ['1','2','3','4'], attribution: '高德地图' });
+    const tileDark = L.tileLayer('https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}', { subdomains: ['1','2','3','4'] });
+    tileLight.addTo(map);
+    let currentTheme = 'light';
+    document.getElementById('themeBtn').onclick = () => {
+        if(currentTheme === 'light') { map.removeLayer(tileLight); tileDark.addTo(map); currentTheme='dark'; }
+        else { map.removeLayer(tileDark); tileLight.addTo(map); currentTheme='light'; }
+    };
+    markersGroup.addTo(map);
+    routeGroup.addTo(map);
+
+    pointsData.forEach(p => {
+        const iconDiv = L.divIcon({ html: `<div style="background:${p.category==='rural'?'#2e8b57':'#e67e22'}; width:26px; height:26px; border-radius:50%; border:2px solid gold; display:flex; align-items:center; justify-content:center; font-size:14px;">${p.icon}</div>`, iconSize:[26,26], className:'custom-marker' });
+        const marker = L.marker([p.lat, p.lng], { icon: iconDiv });
+        marker.bindPopup(`<b>${p.name}</b><br>${p.year}年<br>${p.desc}`);
+        marker.on('click', () => {
+            document.getElementById('dynamicInfoText').innerHTML = `<strong>${p.name}</strong> (${p.year}) — ${p.desc}`;
+        });
+        allMarkers.push({ marker, data: p });
+        markersGroup.addLayer(marker);
+    });
+
+    routesData.forEach(r => {
+        if (r.points) {
+            let latlngs = r.points.map(coord => L.latLng(coord[0], coord[1]));
+            let poly = L.polyline(latlngs, { color: r.color, weight: 3.5, opacity: 0.8 });
+            poly.bindPopup(`<b>${r.name}</b><br>始于${r.yearStart}年`);
+            allRoutes.push({ poly, data: r });
+        } else if (r.lat && r.lng && r.radius) {
+            let circle = L.circle([r.lat, r.lng], {
+                radius: r.radius,
+                color: r.color,
+                fillColor: r.color,
+                fillOpacity: 0.15,
+                weight: 3
+            });
+            circle.bindPopup(`<b>${r.name}</b><br>沿海经济开放区`);
+            allRoutes.push({ poly: circle, data: r });
+        }
+    });
+
+    updateMapByYear(currentYear);
+    animateRoutesByYear(currentYear);
+    initYearTimeline();
+    document.getElementById('toggleReformPoints').onchange = () => filterMarkersByCat();
+    document.getElementById('toggleOpenPoints').onchange = () => filterMarkersByCat();
+    document.getElementById('toggleRoutes').onchange = (e) => { if(e.target.checked) routeGroup.addTo(map); else map.removeLayer(routeGroup); };
+    
+    document.getElementById('backToHomeBtn').onclick = () => {
+        resetQuizProgress();
+        document.getElementById('finalReport').classList.remove('active');
+    };
+
+    resetQuizProgress();
+}
+
+function initYearTimeline() {
+    const items = document.querySelectorAll('.year-item');
+    items.forEach(item => {
+        item.addEventListener('click', () => {
+            const year = parseInt(item.dataset.year);
+            switchToYear(year);
+        });
+    });
+}
+
+function switchToYear(year) {
+    if(modalActive) return;
+    currentYear = year;
+    document.getElementById('currentYearLabel').textContent = year;
+    document.querySelectorAll('.year-item').forEach(i => i.classList.remove('active'));
+    document.querySelector(`[data-year="${year}"]`).classList.add('active');
+    updateMapByYear(year);
+    triggerQuizByYear(year);
+}
+
+function triggerQuizByYear(year) {
+    if (modalActive) return;
+    const node = timelineNodes.find(n => n.year === year);
+    if (node) {
+        showModalForNode(node);
+    }
+}
+
+function filterMarkersByCat() {
+    const reform = document.getElementById('toggleReformPoints').checked;
+    const open = document.getElementById('toggleOpenPoints').checked;
+    allMarkers.forEach(({ marker, data }) => {
+        let visible = data.year <= currentYear;
+        if(data.category === 'rural') visible = visible && reform;
+        if(data.category === 'open') visible = visible && open;
+        if(visible) marker.addTo(markersGroup); else marker.removeFrom(markersGroup);
+    });
+}
+
+function updateMapByYear(year) {
+    currentYear = year;
+    allMarkers.forEach(({ marker, data }) => {
+        let show = data.year <= year;
+        if(data.category === 'rural') show = show && document.getElementById('toggleReformPoints').checked;
+        if(data.category === 'open') show = show && document.getElementById('toggleOpenPoints').checked;
+        if(show) marker.addTo(markersGroup); else marker.removeFrom(markersGroup);
+    });
+    routeGroup.clearLayers();
+    allRoutes.forEach(({ poly, data }) => {
+        if(data.yearStart <= year) {
+            routeGroup.addLayer(poly);
+        }
+    });
+    animateRoutesByYear(year);
+}
+
+function animateRoutesByYear(year) {
+    routeGroup.clearLayers();
+    allRoutes.forEach(({ poly, data }) => {
+        if(data.yearStart <= year) {
+            if (data.points) {
+                const latlngs = data.points.map(c => L.latLng(c[0], c[1]));
+                const newLine = L.polyline(latlngs, { color: data.color, weight: 3.5, opacity: 0.9 });
+                newLine.bindPopup(`<b>${data.name}</b><br>始于${data.yearStart}年`);
+                routeGroup.addLayer(newLine);
+                setTimeout(() => { newLine.snakeIn(280); }, 100);
+            } else {
+                routeGroup.addLayer(poly);
+            }
+        }
+    });
+}
+
+function showModalForNode(node) {
+    modalActive = true;
+    currentModalNode = node;
+    const modal = document.getElementById('quizModal');
+    document.getElementById('modalQuestionText').innerHTML = node.question;
+    const optsDiv = document.getElementById('modalOptions');
+    optsDiv.innerHTML = '';
+    
+    node.options.forEach((opt, idx) => {
+        const optEl = document.createElement('div');
+        optEl.className = 'modal-option';
+        optEl.innerHTML = `${String.fromCharCode(65+idx)}. ${opt}`;
+        optEl.onclick = () => {
+            document.querySelectorAll('.modal-option').forEach(el => el.classList.remove('selected'));
+            optEl.classList.add('selected');
+            optEl.dataset.selected = idx;
+        };
+        optsDiv.appendChild(optEl);
+    });
+    
+    document.getElementById('modalFeedback').innerHTML = '';
+    modal.classList.add('active');
+}
+
+document.getElementById('modalSubmitBtn').onclick = () => {
+    const selected = document.querySelector('.modal-option.selected');
+    if (!selected) { alert('请选择一个答案'); return; }
+    
+    const idx = parseInt(selected.dataset.selected);
+    const correct = (idx === currentModalNode.correct);
+    const feedback = document.getElementById('modalFeedback');
+    
+    if (correct) {
+        feedback.style.background = "#e6f7e9";
+        feedback.style.color = "#2e7d32";
+        feedback.innerHTML = "✅ 回答正确！" + currentModalNode.explanation;
+    } else {
+        feedback.style.background = "#ffebee";
+        feedback.style.color = "#c62828";
+        feedback.innerHTML = "❌ 回答错误，正确答案：" + currentModalNode.options[currentModalNode.correct] + "<br>" + currentModalNode.explanation;
+    }
+
+    userAnswers.push({
+        year: currentModalNode.year,
+        nodeName: currentModalNode.name,
+        question: currentModalNode.question,
+        userAnswer: currentModalNode.options[idx],
+        correctAnswer: currentModalNode.options[currentModalNode.correct],
+        correct: correct
+    });
+
+    setTimeout(() => {
+        document.getElementById('quizModal').classList.remove('active');
+        modalActive = false;
+        
+        if (currentYear === 1990) {
+            showFinalQuiz();
+        }
+    }, 2200);
+};
+
+function showFinalQuiz() {
+    const container = document.getElementById('finalQuestionsContainer');
+    container.innerHTML = '';
+    
+    finalQuestions.forEach((q, qIdx) => {
+        const qDiv = document.createElement('div');
+        qDiv.className = 'final-question';
+        qDiv.innerHTML = `<h3>${q.title}</h3>`;
+        
+        q.options.forEach((opt, oIdx) => {
+            const oDiv = document.createElement('div');
+            oDiv.className = 'final-option';
+            oDiv.textContent = opt;
+            oDiv.onclick = () => {
+                document.querySelectorAll(`.final-question:nth-child(${qIdx+1}) .final-option`).forEach(el => el.classList.remove('selected'));
+                oDiv.classList.add('selected');
+                finalUserAnswers[q.id] = { qIdx, oIdx, text: opt, correct: oIdx === q.correct };
+            };
+            qDiv.appendChild(oDiv);
+        });
+
+        const fb = document.createElement('div');
+        fb.className = 'final-feedback';
+        fb.id = `finalFB${qIdx}`;
+        qDiv.appendChild(fb);
+        container.appendChild(qDiv);
+    });
+    
+    document.getElementById('finalReport').classList.add('active');
+}
+
+document.getElementById('submitFinalBtn').onclick = () => {
+    let allAnswered = true;
+    finalQuestions.forEach((q, i) => {
+        if (!finalUserAnswers[q.id]) allAnswered = false;
+    });
+    if (!allAnswered) { alert('请完成所有探究题目！'); return; }
+
+    finalQuestions.forEach((q, idx) => {
+        const fb = document.getElementById(`finalFB${idx}`);
+        const ans = finalUserAnswers[q.id];
+        fb.style.display = 'block';
+        if (ans.correct) {
+            fb.style.background = "#e6f7e9";
+            fb.style.color = "#2e7d32";
+            fb.innerHTML = "✅ 回答正确！" + q.explanation;
+        } else {
+            fb.style.background = "#ffebee";
+            fb.style.color = "#c62828";
+            fb.innerHTML = "❌ 回答错误，正确答案：" + q.options[q.correct] + "<br>" + q.explanation;
+        }
+    });
+    document.getElementById('finalMsg').textContent = '✅ 答案已提交，查看结果！';
+};
+
+function resetQuizProgress() {
+    currentNodeIndex = 0;
+    userAnswers = [];
+    finalUserAnswers = {};
+    modalActive = false;
+    document.getElementById('quizModal').classList.remove('active');
+    
+    // 直接返回 1990 年，显示完整生长路线
+    currentYear = 1990;
+    document.getElementById('currentYearLabel').textContent = currentYear;
+    document.querySelectorAll('.year-item').forEach(i => i.classList.remove('active'));
+    document.querySelector(`[data-year="${currentYear}"]`).classList.add('active');
+    updateMapByYear(currentYear);
+}
+
+window.onload = initMap;
+</script>
+</body>
+</html>
